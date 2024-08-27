@@ -1,24 +1,26 @@
 # poc-gsmart-messages
 POC GSMART MESSAGES
-Fecha: 09/2024
+- Fecha: 09/2024
+- Plataforma: AWS
 
 ### Resumen de Nuevo Diseño del Módulo de Mensajes
 
-#### 1. **Descripción General del Sistema**
+#### 0. **Descripción General del Sistema**
 
 ![GSMART Messages Architecture](img/gsmart_messages.png)
 
-El diagrama representa una alternativa al módulo de mensajes para la aplicación "GSMART". Este sistema está pensado para el envío y recepción desde la aplicación de mensajes a través de diferentes servicios de AWS con la mínima intervención manual posible, utilizando una combinación de servicios gestionados y personalizados para asegurar alta disponibilidad, escalabilidad y flexibilidad.
+El diagrama representa una alternativa al sistema de mensajes para la aplicación "GSMART". Este módulo está pensado para el envío y recepción de mensajes interno de GSMART a través de diferentes servicios de AWS con la mínima intervención manual posible, utilizando una combinación de servicios gestionados para asegurar alta disponibilidad, escalabilidad y flexibilidad.
 
-#### 2. **Componentes Principales**
-- **API Gateway**: Actúa como punto de entrada al módulo, gestionando las solicitudes HTTP y redirigiéndolas a las funciones **Lambda** para su procesamiento dependiendo del tipo de petición que reciba.
+#### 1. **Componentes Principales**
+- **API Gateway**: Actúa como punto de entrada al módulo, gestionando las solicitudes HTTP y redirigiéndolas a las funciones **Lambda** para su procesamiento dependiendo del método definido al que la petición llame.
 
 - **Lambda Function**: Procesan las solicitudes entrantes desde el API Gateway. Basado en la lógica de negocio, se decide cómo manejar la solicitud, ya sea enviándolo a una cola concreta de SQS, anotando el éxito o fallo en la tabla de dynamodb...etc
 
-- **SQS Queues (eJ)**: Utilizadas para desacoplar el procesamiento de mensajes, garantizando que se manejen de manera asíncrona y escalable. Las colas son utilizadas tanto por SES como por el servicio externo SMTP, de forma que según la clasificación que se realice desde Lambda, se registrará en una cola determinada para no bloquear o ralentizar otro tipo de mensajes ante posibles problemas.
+- **SQS Queues**: Utilizadas para desacoplar el procesamiento de mensajes, garantizando que se manejen de manera asíncrona y escalable. Las colas son utilizadas tanto por SES como por el servicio externo SMTP, de forma que según la clasificación que se realice desde Lambda, se registrará en una cola determinada para no bloquear o ralentizar otro tipo de mensajes ante posibles problemas (Mensajes relacionados con la actividad interna del sistema, mensajes que requieren más tiempo de procesamiento (por subir archivos a S3) reintentos de correos fallidos tras un tiempo determinado..etc)
 
-- **ECS Cluster (.NET Task Definition)**: Este clúster de ECS (Elastic Container Service) está configurado para ejecutar tareas definidas en .NET, lo que permite el procesamiento más complejo de mensajes. Las tareas pueden incluir el envío de correos electrónicos a través de SES, recuperación de correos recibidos de DynamoDB o S3 si exiten adjuntos, y otras operaciones necesarias. Nota: esta parte es posible distribuirla a funciones Lambda dependiendo de requisitos que se acuerden.
+- **ECS Cluster (.NET Task Definition)**: Esta definición de tarea( Deployment en Kubernetes) en ECS está pensado para ejecutar tareas de procesado (en .NET en principio), lo que permite el procesamiento más complejo de mensajes y otras operaciones. Las tareas pueden incluir el envío de correos electrónicos a través de SES, recuperación de correos recibidos de DynamoDB o S3 si exiten adjuntos, y otras operaciones necesarias. ( Nota: esta parte es posible distribuirla a funciones Lambda dependiendo de requisitos que se acuerden )
 
+#### 2. **Componentes complementarios**
 - **SES (Simple Email Service)**: Servicio gestionado de AWS utilizado para enviar correos electrónicos a direcciones externas para clientes que no tienen configuración de salida SMTP propia
 
 - **ext-SMTP**: para casos en los que se requiere integración con sistemas de correo específico.  
@@ -29,7 +31,7 @@ El diagrama representa una alternativa al módulo de mensajes para la aplicació
 
 - **CloudWatch**: Servicio de monitorización que recolecta y visualiza métricas, logs y eventos del sistema. Abierto a reemplazo por otra solución SaaS
 
-#### 3. **Flujo más común de Trabajo**
+#### 3. **Ejemplo de flujo común de Trabajo**
 1. **Solicitud Entrante**: Un cliente envía una solicitud de mensaje a través del **API Gateway**.
 2. **Enrutamiento del Mensaje**: La **Lambda Function** procesa la solicitud, clasificando el mensaje en una cola SQS específica, así como tareas complementarias en otros servicios.
 4. **Procesamiento**: Tareas específicas pueden ser manejadas por contenedores en ECS (o nuevas funciones), que interactúan con DynamoDB para almacenar/recuperar/eliminar información o con S3 para almacenamiento de archivos.
